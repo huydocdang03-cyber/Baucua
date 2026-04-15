@@ -12,9 +12,10 @@ body{font-family:Arial;margin:0;background:url("bg.jpg") center/cover;}
 <body>
 
 <div id="login">
-<input id="username"><br>
-<input id="password" type="password"><br>
+<input id="username" placeholder="user"><br>
+<input id="password" type="password" placeholder="pass"><br>
 <button onclick="login()">Login</button>
+<p id="err"></p>
 </div>
 
 <div id="game" style="display:none;">
@@ -22,24 +23,26 @@ body{font-family:Arial;margin:0;background:url("bg.jpg") center/cover;}
 <h2 id="dealer"></h2>
 <h3 id="timer"></h3>
 <h3 id="money"></h3>
+<h2 id="dice">🎲 🎲 🎲</h2>
 
-<div id="bets"></div>
-
+<!-- ADMIN -->
 <div id="adminPanel" class="panel" style="display:none;">
-<input id="adminResult">
+<input id="adminResult" placeholder="Bầu,Cua,Tôm">
 <button onclick="setResult()">Set</button>
-<button onclick="viewResult()">Xem</button>
 <p id="preview"></p>
 </div>
 
+<!-- BANKER -->
 <div id="bankerPanel" class="panel" style="display:none;">
 <input id="user"><input id="chip">
 <button onclick="add()">+</button>
 <button onclick="sub()">-</button>
 
+<h4>Chọn Dealer</h4>
 <div id="userList"></div>
 </div>
 
+<!-- DEALER -->
 <div id="dealerPanel" class="panel" style="display:none;">
 <input id="min"><input id="max">
 <button onclick="setLimit()">Set cược</button>
@@ -50,56 +53,66 @@ body{font-family:Arial;margin:0;background:url("bg.jpg") center/cover;}
 
 <script src="/socket.io/socket.io.js"></script>
 <script>
-const socket=io();
+const socket = io();
 
+// LOGIN
 function login(){
-socket.emit("login",{username:username.value,password:password.value});
+    socket.emit("login",{
+        username:username.value,
+        password:password.value
+    });
 }
 
 socket.on("login_success",(d)=>{
-login.style.display="none";
-game.style.display="block";
+    login.style.display="none";
+    game.style.display="block";
 
-if(d.role==="admin") adminPanel.style.display="block";
-if(d.role==="banker") bankerPanel.style.display="block";
-if(d.role==="banker") dealerSelectPanel.style.display="block";
+    if(d.role==="admin") adminPanel.style.display="block";
+    if(d.role==="banker") bankerPanel.style.display="block";
 });
 
+// USERS
 socket.on("users",(u)=>{
-let html="";
-for(let id in u){
-html+=u[id].username+" <button onclick=\"setDealer('"+u[id].username+"')\">Chọn</button><br>";
-}
-userList.innerHTML=html;
+    let html="";
 
-let me=u[socket.id];
-if(me) money.innerText="💰 "+me.money;
+    for(let id in u){
+        html+=u[id].username+
+        ` <button onclick="setDealer('${u[id].username}')">Chọn</button><br>`;
+    }
+
+    userList.innerHTML=html;
+
+    let me=u[socket.id];
+    if(me) money.innerText="💰 "+me.money;
 });
 
-function setDealer(n){socket.emit("set_dealer",n);}
-
+// DEALER
 socket.on("dealer",(d)=>{
-dealer.innerText="👑 "+d;
+    dealer.innerText="👑 "+d;
 });
 
+// TIMER
 socket.on("countdown",(t)=>{
-timer.innerText="⏱️ "+t;
+    timer.innerText="⏱️ "+t;
 });
 
-function setResult(){socket.emit("admin_set",adminResult.value);}
-function viewResult(){socket.emit("admin_view");}
-
+// ADMIN AUTO XEM
 socket.on("admin_result",(r)=>{
-preview.innerText=r;
+    if(!r) return;
+    preview.innerText="🎯 "+r.join(" - ");
 });
 
+// RESULT
+socket.on("dice_result",(r)=>{
+    dice.innerText=r;
+});
+
+// FUNCTIONS
+function setDealer(n){socket.emit("set_dealer",n);}
+function setResult(){socket.emit("admin_set",adminResult.value);}
 function add(){socket.emit("add_chip",{user:user.value,chip:+chip.value});}
 function sub(){socket.emit("sub_chip",{user:user.value,chip:+chip.value});}
-
-function setLimit(){
-socket.emit("set_limit",{min:+min.value,max:+max.value});
-}
-
+function setLimit(){socket.emit("set_limit",{min:+min.value,max:+max.value});}
 function openResult(){socket.emit("open_result");}
 </script>
 

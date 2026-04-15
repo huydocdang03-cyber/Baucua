@@ -2,298 +2,105 @@
 <html>
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Bầu Cua VIP PRO</title>
-
 <style>
-body{margin:0;font-family:Arial;}
-
-/* LOGIN */
-#login{
-    height:100vh;
-    display:flex;
-    justify-content:center;
-    align-items:center;
-    background:url("https://images.unsplash.com/photo-1606166325695-94c1c57e0e92") no-repeat center/cover;
-}
-
-.login-box{
-    background:rgba(0,0,0,0.7);
-    padding:30px;
-    border-radius:15px;
-    text-align:center;
-    color:white;
-}
-
-input{
-    padding:10px;
-    margin:10px;
-    width:200px;
-    border-radius:5px;
-    border:none;
-}
-
-button{
-    padding:10px;
-    border:none;
-    border-radius:10px;
-    background:gold;
-    font-weight:bold;
-}
-
-/* GAME */
-#game{
-    display:none;
-    background:#062f26;
-    min-height:100vh;
-    color:white;
-}
-
-.header{text-align:center;color:gold;}
-
-.table{
-    width:95%;
-    margin:auto;
-    background:radial-gradient(circle,#0f5132,#062f26);
-    border-radius:50px;
-    border:5px solid gold;
-    padding:30px;
-    position:relative;
-}
-
-.dealer{
-    position:absolute;
-    top:-50px;
-    left:50%;
-    transform:translateX(-50%);
-}
-
-.dealer img{
-    width:90px;
-    border-radius:50%;
-    border:3px solid gold;
-}
-
-#diceBox{text-align:center;font-size:30px;}
-
-.grid{
-    display:grid;
-    grid-template-columns:repeat(3,1fr);
-    gap:15px;
-}
-
-.bet{
-    background:#145c44;
-    border:2px solid gold;
-    border-radius:20px;
-    padding:20px;
-    text-align:center;
-    cursor:pointer;
-}
-
-.total{color:yellow;}
-
-/* CHIP */
-.chips button{
-    margin:5px;
-    width:60px;
-    height:60px;
-    border-radius:50%;
-}
-
-/* CHIP BAY */
-.chip{
-    position:absolute;
-    background:gold;
-    border-radius:50%;
-    padding:10px;
-    animation:fly 0.8s forwards;
-}
-
-@keyframes fly{
-    to{
-        transform:translateY(-200px);
-        opacity:0;
-    }
-}
-
-.players{
-    display:flex;
-    justify-content:space-between;
-    margin-top:20px;
-}
-
-#history{
-    text-align:center;
-    margin-top:20px;
-    color:lightgreen;
-}
+body{font-family:Arial;margin:0;background:url("bg.jpg") center/cover;}
+#login{text-align:center;margin-top:100px;}
+.panel{background:black;color:white;padding:10px;margin:10px;border-radius:10px;}
 </style>
 </head>
 
 <body>
 
-<!-- LOGIN -->
 <div id="login">
-<div class="login-box">
-<h2>🎲 Bầu Cua</h2>
-<input id="username" placeholder="Username"><br>
-<input id="password" type="password" placeholder="Password"><br>
-<button onclick="login()">Đăng nhập</button>
-<p id="err"></p>
-</div>
+<input id="username"><br>
+<input id="password" type="password"><br>
+<button onclick="login()">Login</button>
 </div>
 
-<!-- GAME -->
-<div id="game">
+<div id="game" style="display:none;">
 
-<div class="header">
-<h2>VIP PRO</h2>
-<div id="dealer">👑 Dealer</div>
-<div id="money">💰 0</div>
-<div id="limit"></div>
+<h2 id="dealer"></h2>
+<h3 id="timer"></h3>
+<h3 id="money"></h3>
+
+<div id="bets"></div>
+
+<div id="adminPanel" class="panel" style="display:none;">
+<input id="adminResult">
+<button onclick="setResult()">Set</button>
+<button onclick="viewResult()">Xem</button>
+<p id="preview"></p>
 </div>
 
-<div class="table">
+<div id="bankerPanel" class="panel" style="display:none;">
+<input id="user"><input id="chip">
+<button onclick="add()">+</button>
+<button onclick="sub()">-</button>
 
-<div class="dealer">
-<img src="https://i.imgur.com/2DhmtJ4.png">
+<div id="userList"></div>
 </div>
 
-<div id="diceBox">🎲 🎲 🎲</div>
-
-<div class="grid">
-<div class="bet" onclick="bet('Bầu',this)">Bầu<div id="b1" class="total">0</div></div>
-<div class="bet" onclick="bet('Cua',this)">Cua<div id="b2" class="total">0</div></div>
-<div class="bet" onclick="bet('Tôm',this)">Tôm<div id="b3" class="total">0</div></div>
-<div class="bet" onclick="bet('Cá',this)">Cá<div id="b4" class="total">0</div></div>
-<div class="bet" onclick="bet('Nai',this)">Nai<div id="b5" class="total">0</div></div>
-<div class="bet" onclick="bet('Gà',this)">Gà<div id="b6" class="total">0</div></div>
+<div id="dealerPanel" class="panel" style="display:none;">
+<input id="min"><input id="max">
+<button onclick="setLimit()">Set cược</button>
+<button onclick="openResult()">Mở</button>
 </div>
-
-</div>
-
-<div class="chips">
-<button onclick="setChip(20)">20</button>
-<button onclick="setChip(50)">50</button>
-<button onclick="setChip(100)">100</button>
-<button onclick="setChip(200)">200</button>
-<button onclick="setChip(500)">500</button>
-</div>
-
-<br>
-
-<div style="text-align:center">
-<button onclick="join()">Vào bàn</button>
-<button onclick="leave()">Rời bàn</button>
-<button onclick="roll()">Lắc</button>
-</div>
-
-<div class="players">
-<div id="leftPlayers"></div>
-<div id="rightPlayers"></div>
-</div>
-
-<div id="history"></div>
 
 </div>
 
 <script src="/socket.io/socket.io.js"></script>
-
 <script>
-const socket = io("https://baucua-cn9p.onrender.com"); // ✅ FIX
+const socket=io();
 
-let currentChip = 20;
-
-// LOGIN
 function login(){
-    socket.emit("login",{
-        username:document.getElementById("username").value,
-        password:document.getElementById("password").value
-    });
+socket.emit("login",{username:username.value,password:password.value});
 }
 
-// FIX LOGIN
-socket.on("login_success",(data)=>{
-    console.log("LOGIN OK", data);
+socket.on("login_success",(d)=>{
+login.style.display="none";
+game.style.display="block";
 
-    document.getElementById("login").style.display="none";
-    document.getElementById("game").style.display="block";
+if(d.role==="admin") adminPanel.style.display="block";
+if(d.role==="banker") bankerPanel.style.display="block";
+if(d.role==="banker") dealerSelectPanel.style.display="block";
 });
 
-socket.on("login_error",()=>{
-    document.getElementById("err").innerText="Sai tài khoản!";
+socket.on("users",(u)=>{
+let html="";
+for(let id in u){
+html+=u[id].username+" <button onclick=\"setDealer('"+u[id].username+"')\">Chọn</button><br>";
+}
+userList.innerHTML=html;
+
+let me=u[socket.id];
+if(me) money.innerText="💰 "+me.money;
 });
 
-// CHIP
-function setChip(v){currentChip=v;}
+function setDealer(n){socket.emit("set_dealer",n);}
 
-// BET
-function bet(name,el){
-    socket.emit("bet",{item:name,amount:currentChip});
+socket.on("dealer",(d)=>{
+dealer.innerText="👑 "+d;
+});
 
-    let chip=document.createElement("div");
-    chip.innerText=currentChip;
-    chip.className="chip";
-    chip.style.left=el.offsetLeft+"px";
-    chip.style.top=el.offsetTop+"px";
+socket.on("countdown",(t)=>{
+timer.innerText="⏱️ "+t;
+});
 
-    document.body.appendChild(chip);
-    setTimeout(()=>chip.remove(),800);
+function setResult(){socket.emit("admin_set",adminResult.value);}
+function viewResult(){socket.emit("admin_view");}
+
+socket.on("admin_result",(r)=>{
+preview.innerText=r;
+});
+
+function add(){socket.emit("add_chip",{user:user.value,chip:+chip.value});}
+function sub(){socket.emit("sub_chip",{user:user.value,chip:+chip.value});}
+
+function setLimit(){
+socket.emit("set_limit",{min:+min.value,max:+max.value});
 }
 
-// ACTION
-function join(){socket.emit("join_table");}
-function leave(){socket.emit("leave_table");}
-function roll(){socket.emit("roll");}
-
-// MONEY
-socket.on("users",u=>{
-    let me=u[socket.id];
-    if(me){
-        let color=me.money<0?"red":"lime";
-        document.getElementById("money").innerHTML="💰 <span style='color:"+color+"'>"+me.money+"</span>";
-    }
-});
-
-// DEALER
-socket.on("dealer",d=>{
-    document.getElementById("dealer").innerText="👑 "+d;
-});
-
-// LIMIT
-socket.on("limit",l=>{
-    document.getElementById("limit").innerText="Cược: "+l.min+" - "+l.max;
-});
-
-// TOTAL
-socket.on("bet_totals",t=>{
-    document.getElementById("b1").innerText=t["Bầu"]||0;
-    document.getElementById("b2").innerText=t["Cua"]||0;
-    document.getElementById("b3").innerText=t["Tôm"]||0;
-    document.getElementById("b4").innerText=t["Cá"]||0;
-    document.getElementById("b5").innerText=t["Nai"]||0;
-    document.getElementById("b6").innerText=t["Gà"]||0;
-});
-
-// HISTORY
-socket.on("history",h=>{
-    let html="";
-    h.forEach(i=>{
-        html+="🎲 "+i.result.join("-")+"<br>";
-    });
-    document.getElementById("history").innerHTML=html;
-});
-
-// PLAYERS
-socket.on("table_users",list=>{
-    let left="",right="";
-    list.forEach((u,i)=>{
-        if(i%2==0) left+="👤 "+u+"<br>";
-        else right+="👤 "+u+"<br>";
-    });
-    document.getElementById("leftPlayers").innerHTML=left;
-    document.getElementById("rightPlayers").innerHTML=right;
-});
+function openResult(){socket.emit("open_result");}
 </script>
 
 </body>

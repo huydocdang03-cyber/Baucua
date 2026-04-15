@@ -1,159 +1,187 @@
 const express = require("express");
 const app = express();
-const server = require("http").createServer(app);
-const io = require("socket.io")(server);
+const http = require("http").createServer(app);
+const io = require("socket.io")(http);
 
 app.use(express.static(__dirname));
 
-let users = {};
-let tables = { table1: [] };
-let bets = [];
-let totals = { Bầu:0,Cua:0,Tôm:0,Cá:0,Nai:0,Gà:0 };
-
-let dealer = "Chưa có";
-let nextResult = null;
-let history = [];
-
-let minBet = 20;
-let maxBet = 500;
-
-// 🔐 ACCOUNTS
+// ====== TÀI KHOẢN ======
 const accounts = {
-    admin: { password: "Tran2003", role: "admin" },
-    banker: { password: "Tran2003@", role: "banker" },
-    player1: { password: "123", role: "player" },
-    player2: { password: "123", role: "player" },
-    player3: { password: "123", role: "player" }
+    admin: { password: "Tran2003", role: "admin", money: 0 },
+    banker: { password: "Tran2003@", role: "banker", money: 10000 }
 };
 
-io.on("connection", socket => {
+// tạo 10 player
+for(let i=1;i<=10;i++){
+    accounts["player"+i] = {
+        password:"123",
+        role:"player",
+        money:1000
+    };
+}
 
-    // LOGIN
+let users = {};
+let tableUsers = [];
+let dealer = null;
+let bets = {};
+let history = [];
+let adminResult = null;
+let limit = {min:1,max:1000};
+
+// ====== LOGIN ======
+io.on("connection", socket=>{
+
     socket.on("login", ({username,password})=>{
         let acc = accounts[username];
+
         if(acc && acc.password === password){
             users[socket.id] = {
-                name: username,
-                role: acc.role,
-                money: 10000
+                username,
+                role:acc.role,
+                money:acc.money
             };
+
             socket.emit("login_success", users[socket.id]);
             io.emit("users", users);
-        } else {
+        }else{
             socket.emit("login_error");
         }
     });
 
-    // JOIN TABLE
+    // ====== VÀO BÀN ======
     socket.on("join_table", ()=>{
-        tables.table1.push(socket.id);
+        let user = users[socket.id];
+        if(!user) return;
 
-        let list = tables.table1.map(id=>users[id]?.name);
-        io.emit("table_users", list);
+        if(!tableUsers.includes(user.username)){
+            tableUsers.push(user.username);
+        }
+
+        if(!dealer) dealer = user.username;
+
+        io.emit("table_users", tableUsers);
+        io.emit("dealer", dealer);
     });
 
-    // LEAVE TABLE
     socket.on("leave_table", ()=>{
-        tables.table1 = tables.table1.filter(id=>id!==socket.id);
+        let user = users[socket.id];
+        if(!user) return;
 
-        let list = tables.table1.map(id=>users[id]?.name);
-        io.emit("table_users", list);
+        tableUsers = tableUsers.filter(u=>u!==user.username);
+        io.emit("table_users", tableUsers);
     });
 
-    // BET
+    // ====== CƯỢC ======
     socket.on("bet", ({item,amount})=>{
         let user = users[socket.id];
         if(!user) return;
 
-        if(amount < minBet || amount > maxBet) return;
+        if(amount < limit.min || amount > limit.max) return;
 
-        totals[item]+=amount;
-        bets.push({id:socket.id,item,amount});
+        if(user.role==="dealer" && user.money < 0) return;
 
-        io.emit("bet_totals", totals);
-    });
+        if(!bets[item]) bets[item]=0;
+        bets[item]+=amount;
 
-    // 💰 BANKER chỉnh tiền
-    socket.on("adjust_money", ({target, amount})=>{
-        let user = users[socket.id];
-        if(!user || user.role !== "banker") return;
+        user.money -= amount;
 
-        let targetUser = Object.values(users).find(u=>u.name === target);
-        if(!targetUser) return;
-
-        targetUser.money += amount;
-
+        io.emit("bet_totals", bets);
         io.emit("users", users);
     });
 
-    // 🎲 DEALER chỉnh cược
-    socket.on("set_limit", ({min,max})=>{
-        let user = users[socket.id];
-        if(!user || user.name !== dealer) return;
-
-        minBet = Number(min);
-        maxBet = Number(max);
-
-        io.emit("limit", {min: minBet, max: maxBet});
-    });
-
-    // 👑 SET DEALER
-    socket.on("set_dealer", name=>{
-        dealer = name;
-        io.emit("dealer", dealer);
-    });
-
-    // 👑 ADMIN SET RESULT (ẨN)
-    socket.on("set_result", result=>{
-        let user = users[socket.id];
-        if(user.role === "admin"){
-            nextResult = result;
-        }
-    });
-
-    // 🎲 ROLL
+    // ====== LẮC ======
     socket.on("roll", ()=>{
-        let items=["Bầu","Cua","Tôm","Cá","Nai","Gà"];
-        let result=[];
+        let result;
 
-        if(nextResult){
-            result = nextResult;
-            nextResult=null;
-        } else {
-            for(let i=0;i<3;i++){
-                result.push(items[Math.floor(Math.random()*6)]);
-            }
+        if(adminResult){
+            result = adminResult;
+            adminResult = null;
+        }else{
+            let items = ["Bầu","Cua","Tôm","Cá","Nai","Gà"];
+            result = [
+                items[Math.floor(Math.random()*6)],
+                items[Math.floor(Math.random()*6)],
+                items[Math.floor(Math.random()*6)]
+            ];
         }
 
         // tính tiền
-        bets.forEach(b=>{
-            let p = users[b.id];
-            let count = result.filter(r=>r===b.item).length;
+        for(let id in users){
+            let u = users[id];
 
-            if(count>0) p.money += b.amount*count;
-            else p.money -= b.amount;
-        });
+            for(let item in bets){
+                let count = result.filter(r=>r===item).length;
+                if(count>0){
+                    u.money += bets[item]*count;
+                }
+            }
+        }
 
-        // lưu lịch sử
-        history.push({
-            result,
-            bets: bets.map(b=>({
-                name: users[b.id]?.name,
-                item: b.item,
-                amount: b.amount
-            })),
-            time: new Date().toLocaleTimeString()
-        });
+        history.unshift({result});
+        if(history.length>10) history.pop();
 
-        bets=[];
-        totals={Bầu:0,Cua:0,Tôm:0,Cá:0,Nai:0,Gà:0};
+        bets = {};
 
-        io.emit("result", result);
+        io.emit("dice_result", result.join(" - "));
+        io.emit("history", history);
         io.emit("users", users);
-        io.emit("bet_totals", totals);
-        io.emit("history", history.slice(-10));
+        io.emit("bet_totals", bets);
+    });
+
+    // ====== ADMIN ======
+    socket.on("admin_set", r=>{
+        let user = users[socket.id];
+        if(user && user.role==="admin"){
+            adminResult = r.split(",");
+        }
+    });
+
+    socket.on("admin_view", ()=>{
+        let user = users[socket.id];
+        if(user && user.role==="admin"){
+            socket.emit("admin_result", adminResult);
+        }
+    });
+
+    // ====== BANKER ======
+    socket.on("add_chip", data=>{
+        let user = users[socket.id];
+        if(user.role==="banker"){
+            for(let id in users){
+                if(users[id].username===data.user){
+                    users[id].money += data.chip;
+                }
+            }
+            io.emit("users", users);
+        }
+    });
+
+    socket.on("sub_chip", data=>{
+        let user = users[socket.id];
+        if(user.role==="banker"){
+            for(let id in users){
+                if(users[id].username===data.user){
+                    users[id].money -= data.chip;
+                }
+            }
+            io.emit("users", users);
+        }
+    });
+
+    socket.on("set_limit", l=>{
+        let user = users[socket.id];
+        if(user.role==="banker"){
+            limit = l;
+            io.emit("limit", limit);
+        }
+    });
+
+    socket.on("disconnect", ()=>{
+        delete users[socket.id];
     });
 
 });
 
-server.listen(process.env.PORT || 3000);
+http.listen(3000, ()=>{
+    console.log("Server chạy 3000");
+});

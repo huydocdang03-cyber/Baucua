@@ -5,183 +5,175 @@ const io = require("socket.io")(http);
 
 app.use(express.static(__dirname));
 
-// ====== TÀI KHOẢN ======
 const accounts = {
     admin: { password: "Tran2003", role: "admin", money: 0 },
     banker: { password: "Tran2003@", role: "banker", money: 10000 }
 };
 
-// tạo 10 player
 for(let i=1;i<=10;i++){
-    accounts["player"+i] = {
-        password:"123",
-        role:"player",
-        money:1000
-    };
+    accounts["player"+i]={password:"123",role:"player",money:1000};
 }
 
 let users = {};
-let tableUsers = [];
-let dealer = null;
 let bets = {};
 let history = [];
+let dealer = null;
+
 let adminResult = null;
+let currentResult = null;
+
+let betting = false;
+let countdown = 30;
+
 let limit = {min:1,max:1000};
 
-// ====== LOGIN ======
-io.on("connection", socket=>{
+function randomResult(){
+    let items=["Bầu","Cua","Tôm","Cá","Nai","Gà"];
+    return [
+        items[Math.floor(Math.random()*6)],
+        items[Math.floor(Math.random()*6)],
+        items[Math.floor(Math.random()*6)]
+    ];
+}
 
-    socket.on("login", ({username,password})=>{
-        let acc = accounts[username];
+function startRound(){
+    bets = {};
+    betting = true;
+    countdown = 30;
 
-        if(acc && acc.password === password){
-            users[socket.id] = {
-                username,
-                role:acc.role,
-                money:acc.money
-            };
+    currentResult = adminResult ? adminResult : randomResult();
+    adminResult = null;
 
-            socket.emit("login_success", users[socket.id]);
-            io.emit("users", users);
-        }else{
-            socket.emit("login_error");
+    io.emit("dice_result","🎲 🎲 🎲");
+
+    let timer = setInterval(()=>{
+        countdown--;
+        io.emit("countdown",countdown);
+
+        if(countdown<=0){
+            clearInterval(timer);
+            betting=false;
         }
-    });
+    },1000);
+}
 
-    // ====== VÀO BÀN ======
-    socket.on("join_table", ()=>{
-        let user = users[socket.id];
-        if(!user) return;
+io.on("connection",socket=>{
 
-        if(!tableUsers.includes(user.username)){
-            tableUsers.push(user.username);
+socket.on("login",({username,password})=>{
+    let acc = accounts[username];
+    if(acc && acc.password===password){
+        users[socket.id]={username,role:acc.role,money:acc.money};
+        socket.emit("login_success",users[socket.id]);
+        io.emit("users",users);
+    }else socket.emit("login_error");
+});
+
+// BANKER CHỌN DEALER
+socket.on("set_dealer",(name)=>{
+    let u=users[socket.id];
+    if(!u || u.role!=="banker") return;
+
+    for(let id in users){
+        if(users[id].username===name){
+            dealer=name;
+            io.emit("dealer",dealer);
         }
+    }
+});
 
-        if(!dealer) dealer = user.username;
+// BET
+socket.on("bet",({item,amount})=>{
+    let u=users[socket.id];
+    if(!u || !betting) return;
 
-        io.emit("table_users", tableUsers);
-        io.emit("dealer", dealer);
-    });
+    if(amount<limit.min||amount>limit.max) return;
 
-    socket.on("leave_table", ()=>{
-        let user = users[socket.id];
-        if(!user) return;
+    if(!bets[item]) bets[item]=0;
+    bets[item]+=amount;
 
-        tableUsers = tableUsers.filter(u=>u!==user.username);
-        io.emit("table_users", tableUsers);
-    });
+    u.money-=amount;
 
-    // ====== CƯỢC ======
-    socket.on("bet", ({item,amount})=>{
-        let user = users[socket.id];
-        if(!user) return;
+    io.emit("bet_totals",bets);
+    io.emit("users",users);
+});
 
-        if(amount < limit.min || amount > limit.max) return;
+// ADMIN
+socket.on("admin_set",r=>{
+    let u=users[socket.id];
+    if(u.role==="admin"){
+        adminResult=r.split(",");
+    }
+});
 
-        if(user.role==="dealer" && user.money < 0) return;
+socket.on("admin_view",()=>{
+    let u=users[socket.id];
+    if(u.role==="admin"){
+        socket.emit("admin_result",currentResult);
+    }
+});
 
-        if(!bets[item]) bets[item]=0;
-        bets[item]+=amount;
+// DEALER MỞ
+socket.on("open_result",()=>{
+    let u=users[socket.id];
 
-        user.money -= amount;
+    if(!u || u.username!==dealer) return;
+    if(betting) return;
 
-        io.emit("bet_totals", bets);
-        io.emit("users", users);
-    });
-
-    // ====== LẮC ======
-    socket.on("roll", ()=>{
-        let result;
-
-        if(adminResult){
-            result = adminResult;
-            adminResult = null;
-        }else{
-            let items = ["Bầu","Cua","Tôm","Cá","Nai","Gà"];
-            result = [
-                items[Math.floor(Math.random()*6)],
-                items[Math.floor(Math.random()*6)],
-                items[Math.floor(Math.random()*6)]
-            ];
+    for(let id in users){
+        let p=users[id];
+        for(let item in bets){
+            let count=currentResult.filter(x=>x===item).length;
+            if(count>0){
+                p.money+=bets[item]*count;
+            }
         }
+    }
 
-        // tính tiền
+    history.unshift({result:currentResult});
+    if(history.length>10) history.pop();
+
+    io.emit("dice_result",currentResult.join(" - "));
+    io.emit("history",history);
+    io.emit("users",users);
+
+    startRound();
+});
+
+// BANKER CHIP
+socket.on("add_chip",d=>{
+    let u=users[socket.id];
+    if(u.role==="banker"){
         for(let id in users){
-            let u = users[id];
-
-            for(let item in bets){
-                let count = result.filter(r=>r===item).length;
-                if(count>0){
-                    u.money += bets[item]*count;
-                }
+            if(users[id].username===d.user){
+                users[id].money+=d.chip;
             }
         }
+        io.emit("users",users);
+    }
+});
 
-        history.unshift({result});
-        if(history.length>10) history.pop();
-
-        bets = {};
-
-        io.emit("dice_result", result.join(" - "));
-        io.emit("history", history);
-        io.emit("users", users);
-        io.emit("bet_totals", bets);
-    });
-
-    // ====== ADMIN ======
-    socket.on("admin_set", r=>{
-        let user = users[socket.id];
-        if(user && user.role==="admin"){
-            adminResult = r.split(",");
-        }
-    });
-
-    socket.on("admin_view", ()=>{
-        let user = users[socket.id];
-        if(user && user.role==="admin"){
-            socket.emit("admin_result", adminResult);
-        }
-    });
-
-    // ====== BANKER ======
-    socket.on("add_chip", data=>{
-        let user = users[socket.id];
-        if(user.role==="banker"){
-            for(let id in users){
-                if(users[id].username===data.user){
-                    users[id].money += data.chip;
-                }
+socket.on("sub_chip",d=>{
+    let u=users[socket.id];
+    if(u.role==="banker"){
+        for(let id in users){
+            if(users[id].username===d.user){
+                users[id].money-=d.chip;
             }
-            io.emit("users", users);
         }
-    });
+        io.emit("users",users);
+    }
+});
 
-    socket.on("sub_chip", data=>{
-        let user = users[socket.id];
-        if(user.role==="banker"){
-            for(let id in users){
-                if(users[id].username===data.user){
-                    users[id].money -= data.chip;
-                }
-            }
-            io.emit("users", users);
-        }
-    });
-
-    socket.on("set_limit", l=>{
-        let user = users[socket.id];
-        if(user.role==="banker"){
-            limit = l;
-            io.emit("limit", limit);
-        }
-    });
-
-    socket.on("disconnect", ()=>{
-        delete users[socket.id];
-    });
+// DEALER SET LIMIT
+socket.on("set_limit",l=>{
+    let u=users[socket.id];
+    if(u.username===dealer){
+        limit=l;
+        io.emit("limit",limit);
+    }
+});
 
 });
 
-http.listen(3000, ()=>{
-    console.log("Server chạy 3000");
-});
+const PORT = process.env.PORT || 3000;
+http.listen(PORT);

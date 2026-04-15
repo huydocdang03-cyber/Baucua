@@ -13,7 +13,7 @@ body{margin:0;font-family:Arial;}
     display:flex;
     justify-content:center;
     align-items:center;
-    background:url("https://i.imgur.com/7QZ6X9R.jpeg") no-repeat center/cover;
+    background:url("https://images.unsplash.com/photo-1606166325695-94c1c57e0e92") no-repeat center/cover;
 }
 
 .login-box{
@@ -200,28 +200,34 @@ button{
 <script src="/socket.io/socket.io.js"></script>
 
 <script>
-const socket = io("https://baucua-cn9p.onrender.com"); // ✅ ĐÃ FIX
+const socket = io("https://baucua-cn9p.onrender.com"); // ✅ FIX
 
 let currentChip = 20;
 
+// LOGIN
 function login(){
     socket.emit("login",{
-        username:username.value,
-        password:password.value
+        username:document.getElementById("username").value,
+        password:document.getElementById("password").value
     });
 }
 
-socket.on("login_success",()=>{
-    login.style.display="none";
-    game.style.display="block";
+// FIX LOGIN
+socket.on("login_success",(data)=>{
+    console.log("LOGIN OK", data);
+
+    document.getElementById("login").style.display="none";
+    document.getElementById("game").style.display="block";
 });
 
 socket.on("login_error",()=>{
-    err.innerText="Sai tài khoản!";
+    document.getElementById("err").innerText="Sai tài khoản!";
 });
 
+// CHIP
 function setChip(v){currentChip=v;}
 
+// BET
 function bet(name,el){
     socket.emit("bet",{item:name,amount:currentChip});
 
@@ -235,51 +241,58 @@ function bet(name,el){
     setTimeout(()=>chip.remove(),800);
 }
 
+// ACTION
 function join(){socket.emit("join_table");}
 function leave(){socket.emit("leave_table");}
 function roll(){socket.emit("roll");}
 
+// MONEY
 socket.on("users",u=>{
     let me=u[socket.id];
     if(me){
         let color=me.money<0?"red":"lime";
-        money.innerHTML="💰 <span style='color:"+color+"'>"+me.money+"</span>";
+        document.getElementById("money").innerHTML="💰 <span style='color:"+color+"'>"+me.money+"</span>";
     }
 });
 
+// DEALER
 socket.on("dealer",d=>{
-    dealer.innerText="👑 "+d;
+    document.getElementById("dealer").innerText="👑 "+d;
 });
 
+// LIMIT
 socket.on("limit",l=>{
-    limit.innerText="Cược: "+l.min+" - "+l.max;
+    document.getElementById("limit").innerText="Cược: "+l.min+" - "+l.max;
 });
 
+// TOTAL
 socket.on("bet_totals",t=>{
-    b1.innerText=t["Bầu"];
-    b2.innerText=t["Cua"];
-    b3.innerText=t["Tôm"];
-    b4.innerText=t["Cá"];
-    b5.innerText=t["Nai"];
-    b6.innerText=t["Gà"];
+    document.getElementById("b1").innerText=t["Bầu"]||0;
+    document.getElementById("b2").innerText=t["Cua"]||0;
+    document.getElementById("b3").innerText=t["Tôm"]||0;
+    document.getElementById("b4").innerText=t["Cá"]||0;
+    document.getElementById("b5").innerText=t["Nai"]||0;
+    document.getElementById("b6").innerText=t["Gà"]||0;
 });
 
+// HISTORY
 socket.on("history",h=>{
     let html="";
     h.forEach(i=>{
         html+="🎲 "+i.result.join("-")+"<br>";
     });
-    history.innerHTML=html;
+    document.getElementById("history").innerHTML=html;
 });
 
+// PLAYERS
 socket.on("table_users",list=>{
     let left="",right="";
     list.forEach((u,i)=>{
         if(i%2==0) left+="👤 "+u+"<br>";
         else right+="👤 "+u+"<br>";
     });
-    leftPlayers.innerHTML=left;
-    rightPlayers.innerHTML=right;
+    document.getElementById("leftPlayers").innerHTML=left;
+    document.getElementById("rightPlayers").innerHTML=right;
 });
 </script>
 

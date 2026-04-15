@@ -1,80 +1,191 @@
 <!DOCTYPE html>
 <html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+body {
+    margin:0;
+    background:#0b3d2e;
+    color:white;
+    font-family:Arial;
+    text-align:center;
+}
+
+.top-bar {
+    display:flex;
+    justify-content:space-between;
+    padding:10px;
+    background:#06281d;
+}
+
+.grid {
+    display:grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap:10px;
+    padding:10px;
+}
+
+.bet-box {
+    border:2px solid gold;
+    border-radius:10px;
+    padding:20px;
+    background:#145c44;
+    position:relative;
+}
+
+.total {
+    position:absolute;
+    bottom:5px;
+    right:5px;
+    color:gold;
+}
+
+.chip {
+    background:gold;
+    color:black;
+    padding:5px;
+    border-radius:50%;
+    margin:2px;
+    display:inline-block;
+}
+
+button {
+    padding:10px;
+    margin:5px;
+}
+</style>
+</head>
+
 <body>
 
-<h2>Bầu Cua Online</h2>
+<!-- 🔥 TOP INFO -->
+<div class="top-bar">
+    <div id="money">💰 0</div>
+    <div id="dealer">👑 Dealer: chưa có</div>
+    <div id="players">👥 0 người</div>
+</div>
 
-<input id="name" placeholder="Tên">
-<select id="role">
-    <option value="player">Player</option>
-    <option value="admin">Admin</option>
-    <option value="banker">Banker</option>
-</select>
+<!-- 🔥 CHỌN CHIP -->
+<div>
+    <button onclick="selectChip(100)">100</button>
+    <button onclick="selectChip(500)">500</button>
+    <button onclick="selectChip(1000)">1000</button>
+</div>
 
-<button onclick="join()">Vào</button>
+<!-- 🔥 BÀN -->
+<div class="grid">
 
-<div id="game" style="display:none">
+<div class="bet-box" onclick="bet('Bầu', this)">
+🐓 Bầu
+<div class="chips"></div>
+<div class="total" id="total-Bầu">0</div>
+</div>
 
-<h3 id="money"></h3>
-<h3 id="dealer"></h3>
+<div class="bet-box" onclick="bet('Cua', this)">
+🦀 Cua
+<div class="chips"></div>
+<div class="total" id="total-Cua">0</div>
+</div>
 
-<button onclick="bet('Bầu')">Bầu</button>
-<button onclick="bet('Cua')">Cua</button>
-<button onclick="bet('Tôm')">Tôm</button>
-<button onclick="bet('Cá')">Cá</button>
-<button onclick="bet('Nai')">Nai</button>
-<button onclick="bet('Gà')">Gà</button>
+<div class="bet-box" onclick="bet('Tôm', this)">
+🦐 Tôm
+<div class="chips"></div>
+<div class="total" id="total-Tôm">0</div>
+</div>
 
-<br><br>
+<div class="bet-box" onclick="bet('Cá', this)">
+🐟 Cá
+<div class="chips"></div>
+<div class="total" id="total-Cá">0</div>
+</div>
 
-<button onclick="roll()">Lắc</button>
-<button onclick="generate()">Admin tạo KQ</button>
+<div class="bet-box" onclick="bet('Nai', this)">
+🦌 Nai
+<div class="chips"></div>
+<div class="total" id="total-Nai">0</div>
+</div>
 
-<h3 id="result"></h3>
+<div class="bet-box" onclick="bet('Gà', this)">
+🐔 Gà
+<div class="chips"></div>
+<div class="total" id="total-Gà">0</div>
+</div>
 
 </div>
 
-<script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+<!-- 🔥 BUTTON -->
+<button onclick="joinTable()">Vào bàn</button>
+<button onclick="leaveTable()">Rời bàn</button>
+<button onclick="roll()">Lắc</button>
+
+<script src="/socket.io/socket.io.js"></script>
 <script>
-const socket = io("https://YOUR_SERVER_LINK");
+const socket = io("https://YOUR_RENDER_LINK");
 
-function join(){
-    const name = document.getElementById("name").value;
-    const role = document.getElementById("role").value;
+let currentTable = "table1";
+let selectedChip = 100;
 
-    socket.emit("join", {name, role});
-    document.getElementById("game").style.display="block";
+// chọn chip
+function selectChip(v){
+    selectedChip = v;
 }
 
-function bet(item){
-    socket.emit("bet", {item, amount:100});
+// cược
+function bet(item, el){
+    socket.emit("bet", {
+        item,
+        amount: selectedChip,
+        table: currentTable
+    });
+
+    let chip = document.createElement("div");
+    chip.className = "chip";
+    chip.innerText = selectedChip;
+    el.querySelector(".chips").appendChild(chip);
 }
 
+// vào bàn
+function joinTable(){
+    socket.emit("join_table", currentTable);
+}
+
+// rời bàn
+function leaveTable(){
+    socket.emit("leave_table", currentTable);
+}
+
+// lắc
 function roll(){
-    socket.emit("roll");
+    socket.emit("roll", currentTable);
 }
 
-function generate(){
-    socket.emit("admin_generate");
-}
-
-socket.on("preview", r=>{
-    alert("Admin thấy trước: "+r.join("-"));
+// cập nhật người chơi
+socket.on("table_users", users=>{
+    document.getElementById("players").innerText =
+        "👥 " + users.length + " người";
 });
 
-socket.on("dealer", d=>{
-    document.getElementById("dealer").innerText="Dealer: "+d;
+// dealer
+socket.on("dealer", name=>{
+    document.getElementById("dealer").innerText =
+        "👑 Dealer: " + name;
 });
 
-socket.on("users", u=>{
-    let me = u[Object.keys(u).find(k=>k===socket.id)];
-    if(me){
-        document.getElementById("money").innerText="Tiền: "+me.money;
+// tổng tiền mỗi ô
+socket.on("bet_totals", totals=>{
+    for(let key in totals){
+        let el = document.getElementById("total-"+key);
+        if(el) el.innerText = totals[key];
     }
 });
 
-socket.on("result", r=>{
-    document.getElementById("result").innerText="KQ: "+r.join("-");
+// tiền mình
+socket.on("users", users=>{
+    let me = users[socket.id];
+    if(me){
+        document.getElementById("money").innerText =
+            "💰 " + me.money;
+    }
 });
 </script>
 

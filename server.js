@@ -1,129 +1,151 @@
 const express = require("express");
-const http = require("http");
-const { Server } = require("socket.io");
-
 const app = express();
-const server = http.createServer(app);
-const io = new Server(server, {
-    cors: { origin: "*" }
-});
+const http = require("http").createServer(app);
+const io = require("socket.io")(http);
+
+app.use(express.static(__dirname));
 
 let users = {};
 let bets = [];
-let dealer = null;
+let tables = { table1: [] };
+
+let totals = {
+    "Bầu":0,"Cua":0,"Tôm":0,
+    "Cá":0,"Nai":0,"Gà":0
+};
+
+let dealer = "player1";
 let nextResult = null;
 
-function createUser(id, name, role="player"){
-    users[id] = {
-        id,
-        name,
-        role,
-        money: role === "banker" ? 100000 : 1000
-    };
-}
+let minBet = 100;
+let maxBet = 1000;
 
-io.on("connection", (socket) => {
+// 🔐 TÀI KHOẢN
+const accounts = {
+    admin: { password: "Tran2003", role: "admin" },
+    banker: { password: "Tran2003@", role: "banker" },
 
-    socket.on("join", ({name, role}) => {
-        createUser(socket.id, name, role);
-        io.emit("users", users);
-    });
+    player1: { password: "123", role: "player" },
+    player2: { password: "123", role: "player" },
+    player3: { password: "123", role: "player" },
+    player4: { password: "123", role: "player" },
+    player5: { password: "123", role: "player" },
+    player6: { password: "123", role: "player" },
+    player7: { password: "123", role: "player" },
+    player8: { password: "123", role: "player" },
+    player9: { password: "123", role: "player" },
+    player10:{ password: "123", role: "player" }
+};
 
-    // ADMIN tạo kết quả trước
-    socket.on("admin_generate", () => {
-        const user = users[socket.id];
-        if(user.role !== "admin") return;
+io.on("connection", socket => {
 
-        const items = ["Bầu","Cua","Tôm","Cá","Nai","Gà"];
-        nextResult = [];
-
-        for(let i=0;i<3;i++){
-            nextResult.push(items[Math.floor(Math.random()*6)]);
+    // 🔐 LOGIN
+    socket.on("login", ({username, password})=>{
+        let acc = accounts[username];
+        if(acc && acc.password === password){
+            users[socket.id] = {
+                name: username,
+                role: acc.role,
+                money: 10000
+            };
+            socket.emit("login_success", users[socket.id]);
+            io.emit("users", users);
         }
-
-        socket.emit("preview", nextResult);
     });
 
-    // BANKER chọn dealer
-    socket.on("set_dealer", (targetId) => {
-        const user = users[socket.id];
-        if(user.role !== "banker") return;
+    // 🪑 JOIN TABLE
+    socket.on("join_table", table=>{
+        if(!tables[table]) tables[table]=[];
+        tables[table].push(socket.id);
+        socket.join(table);
 
-        if(users[targetId].money <= 0) return;
-
-        dealer = targetId;
-        io.emit("dealer", dealer);
+        io.to(table).emit("table_users", tables[table]);
     });
 
-    // BANKER chuyển tiền
-    socket.on("transfer", ({to, amount}) => {
-        const user = users[socket.id];
-        if(user.role !== "banker") return;
+    // 🚪 LEAVE TABLE
+    socket.on("leave_table", table=>{
+        tables[table] = tables[table].filter(id=>id!==socket.id);
+        socket.leave(table);
 
-        users[socket.id].money -= amount;
-        users[to].money += amount;
-
-        io.emit("users", users);
+        io.to(table).emit("table_users", tables[table]);
     });
 
-    // cược
-    socket.on("bet", ({item, amount}) => {
+    // 🎲 BET
+    socket.on("bet", ({item, amount, table})=>{
         let user = users[socket.id];
-        if(user.money <= 0) return;
+        if(!user) return;
 
-        bets.push({id: socket.id, item, amount});
+        if(amount < minBet || amount > maxBet) return;
+
+        totals[item] += amount;
+
+        bets.push({id: socket.id, item, amount, table});
+
+        io.to(table).emit("bet_totals", totals);
     });
 
-    // roll
-    socket.on("roll", () => {
-        if(!dealer) return;
+    // 👑 ADMIN SET RESULT
+    socket.on("set_result", result=>{
+        let user = users[socket.id];
+        if(user.role === "admin"){
+            nextResult = result;
+        }
+    });
 
+    // 🎲 ROLL
+    socket.on("roll", table=>{
+        let items = ["Bầu","Cua","Tôm","Cá","Nai","Gà"];
         let result;
 
         if(nextResult){
             result = nextResult;
             nextResult = null;
         } else {
-            const items = ["Bầu","Cua","Tôm","Cá","Nai","Gà"];
             result = [];
             for(let i=0;i<3;i++){
                 result.push(items[Math.floor(Math.random()*6)]);
             }
         }
 
-        bets.forEach(b => {
+        bets.forEach(b=>{
             let player = users[b.id];
-            let d = users[dealer];
+            if(!player) return;
 
             let count = result.filter(r=>r===b.item).length;
 
             if(count>0){
-                let win = b.amount * count;
-                player.money += win;
-                d.money -= win;
-            }else{
+                player.money += b.amount * count;
+            } else {
                 player.money -= b.amount;
-                d.money += b.amount;
             }
         });
 
         bets = [];
 
-        if(users[dealer].money < 0){
-            io.emit("dealer_broke", dealer);
-            dealer = null;
-        }
+        totals = {
+            "Bầu":0,"Cua":0,"Tôm":0,
+            "Cá":0,"Nai":0,"Gà":0
+        };
 
         io.emit("result", result);
         io.emit("users", users);
+        io.emit("bet_totals", totals);
     });
 
-    socket.on("disconnect", ()=>{
-        delete users[socket.id];
-        io.emit("users", users);
+    // 👑 SET DEALER
+    socket.on("set_dealer", name=>{
+        dealer = name;
+        io.emit("dealer", dealer);
+    });
+
+    // 💰 SET LIMIT
+    socket.on("set_limit", ({min,max})=>{
+        minBet = min;
+        maxBet = max;
     });
 
 });
 
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log("Server chạy"));
+http.listen(3000, ()=>{
+    console.log("Server chạy cổng 3000");
+});

@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+<body>
+
+<h2>Bầu Cua Online</h2>
+
+<input id="name" placeholder="Tên">
+<select id="role">
+    <option value="player">Player</option>
+    <option value="admin">Admin</option>
+    <option value="banker">Banker</option>
+</select>
+
+<button onclick="join()">Vào</button>
+
+<div id="game" style="display:none">
+
+<h3 id="money"></h3>
+<h3 id="dealer"></h3>
+
+<button onclick="bet('Bầu')">Bầu</button>
+<button onclick="bet('Cua')">Cua</button>
+<button onclick="bet('Tôm')">Tôm</button>
+<button onclick="bet('Cá')">Cá</button>
+<button onclick="bet('Nai')">Nai</button>
+<button onclick="bet('Gà')">Gà</button>
+
+<br><br>
+
+<button onclick="roll()">Lắc</button>
+<button onclick="generate()">Admin tạo KQ</button>
+
+<h3 id="result"></h3>
+
+</div>
+
+<script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+<script>
+const socket = io("https://YOUR_SERVER_LINK");
+
+function join(){
+    const name = document.getElementById("name").value;
+    const role = document.getElementById("role").value;
+
+    socket.emit("join", {name, role});
+    document.getElementById("game").style.display="block";
+}
+
+function bet(item){
+    socket.emit("bet", {item, amount:100});
+}
+
+function roll(){
+    socket.emit("roll");
+}
+
+function generate(){
+    socket.emit("admin_generate");
+}
+
+socket.on("preview", r=>{
+    alert("Admin thấy trước: "+r.join("-"));
+});
+
+socket.on("dealer", d=>{
+    document.getElementById("dealer").innerText="Dealer: "+d;
+});
+
+socket.on("users", u=>{
+    let me = u[Object.keys(u).find(k=>k===socket.id)];
+    if(me){
+        document.getElementById("money").innerText="Tiền: "+me.money;
+    }
+});
+
+socket.on("result", r=>{
+    document.getElementById("result").innerText="KQ: "+r.join("-");
+});
+</script>
+
+</body>
+</html>
